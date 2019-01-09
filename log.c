@@ -6,6 +6,7 @@
  ************************************************************************/
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <errno.h>
@@ -15,18 +16,18 @@
 #include <fcntl.h>
 #include "log.h"
 
-const char* LogPreFix = NULL;
-const char* LogDebugName = NULL;
-const char* LogInfoName = NULL;
+char* LogPreFix = NULL;
+char* LogDebugName = NULL;
+char* LogInfoName = NULL;
 
 //文件或目录是否存在  存在返回0 不存在返回-1
-int FileIsExist(const char* pathname)
+int LOG_FileIsExist(const char* pathname)
 {
 	return access(pathname, F_OK);
 }
 
 //linux下C语言创建多级目录 传入文件路径
-int CreateDir_FromFile(const char *filePathAndName)  
+int LOG_CreateDir_FromFile(const char *filePathAndName)  
 {  
 	//取文件目录
 	char sPathName[128] = { 0 };
@@ -74,29 +75,177 @@ int CreateDir_FromFile(const char *filePathAndName)
 	return   0;  
 }
 
-void log_init(const char* logprefix, const char *log_debug_name, const char *log_info_name)
+int LOG_pwd(char* outdata, int outdata_size)
 {
-	if(!logprefix)
-		logprefix = "notLogPreFix";
-	if(!log_debug_name)
-		log_debug_name = "not_debug_name.log";
-	if(!log_info_name)
-		log_info_name = "not_info_name.log";
+	if(!outdata || outdata_size == 0)
+		return -1;
+		
+	//这个是取工作目录 pass
+	getcwd(outdata, outdata_size);
+	return 1;
 	
-	//目录不存在就创建
-	if(FileIsExist(log_debug_name) == -1)
+/*	
+	//这个也是取工作目录！！！ pass
+	realpath("./", outdata);
+	return 0;
+
+
+	//底下的也是取工作目录 pass
+    char tmp_buffer[50]={0};
+    char command[] = "pwd";
+    FILE *fp = popen(command, "r");
+    if(fp != NULL)
+    {
+        int read_len =  fread(tmp_buffer,1,sizeof(tmp_buffer),fp);
+
+        pclose(fp);
+        if(read_len == 0)
+        {
+            // LOG_TRACE("Can't find ssid in wireless file and exit() ...");
+            //          return 0;
+            //                  
+        }
+        else
+        {
+            int tmp_len = (outdata_size-1) < (read_len-1) ? (outdata_size-1) : (read_len-1);//删除换行字符
+            if(tmp_len == 0)
+                tmp_len = 1;    //如果是根目录就是/
+            strncpy(outdata, tmp_buffer, tmp_len);
+            outdata[tmp_len] = 0;
+            return 1;
+        }
+    }
+    else
+    {
+        return 0;
+    }
+*/
+}
+
+int getFilePath(const char* fileName, char *out_filePath, int out_filePath_maxlen)
+{
+	char filePath[256];
+	int len;
+	
+	if(!fileName)
 	{
-		CreateDir_FromFile(log_debug_name);
+		return -1;
 	}
-	if(FileIsExist(log_info_name) == -1)
+	len = strlen(fileName);
+	if(len == 0)
 	{
-		CreateDir_FromFile(log_info_name);
+		return -2;
+	}
+	if(fileName[0] != '/')
+	{
+		return -3;
+	}
+	
+	if(!out_filePath)
+	{
+		return -4;
+	}
+		
+	//从右往左找/
+	int i = 0;
+	for(i = len - 1; i >= 0; i--)
+	{
+		if(fileName[i] == '/')
+		{
+			strncpy(filePath, fileName, i);
+			filePath[i] = 0;
+			break;
+		}
+	}
+	int out_len = strlen(filePath);
+	out_len = (out_len > out_filePath_maxlen-1 ? out_filePath_maxlen-1 : out_len);
+	strncpy(out_filePath, filePath, out_len);
+	out_filePath[out_len] = 0;
+	return 0;
+}
+
+void log_init(const char *argv_0, const char* logprefix, const char *log_debug_name, const char *log_info_name)
+{
+	char logprefix_tmpbuf[256];
+	char log_debug_name_tmpbuf[256];
+	char log_info_name_tmpbuf[256];
+	char curPath[256];
+	
+	if(argv_0[0] == '/')	//绝对路径启动
+	{
+		//绝对路径启动的程序
+		int ret = getFilePath(argv_0, curPath, sizeof(curPath));
+		if( ret != 0)
+		{
+			printf("getFilePath[%s] error[%d]\n", argv_0, ret);
+			return;
+		}
+	}
+	else
+	{
+		LOG_pwd(curPath, sizeof(curPath));
+	}
+	
+	if(!logprefix)
+		logprefix = "GC_LOG";
+	if(!log_debug_name)
+		log_debug_name = "debug.log";
+	if(!log_info_name)
+		log_info_name = "info.log";
+		
+	strcpy(logprefix_tmpbuf, logprefix);
+	strcpy(log_debug_name_tmpbuf, log_debug_name);
+	strcpy(log_info_name_tmpbuf, log_info_name);
+
+	//判断绝对路径还是相对路径
+	if(log_debug_name_tmpbuf[0] != '/')
+	{
+		//相对路径 前面加上pwd的目录
+		
+		char tmp_buf[256];
+		strcpy(tmp_buf, log_debug_name_tmpbuf);	//临时保存数据
+		
+		strcpy(log_debug_name_tmpbuf, curPath);	// root
+		strcat(log_debug_name_tmpbuf, "/");		// root/
+		strcat(log_debug_name_tmpbuf, tmp_buf);	// root/xxx.log
+	}
+	if(log_info_name_tmpbuf[0] != '/')
+	{
+		//相对路径 前面加上pwd的目录
+		char tmp_buf[256];
+		strcpy(tmp_buf, log_info_name_tmpbuf);	//临时保存数据
+		
+		strcpy(log_info_name_tmpbuf, curPath);	// root
+		strcat(log_info_name_tmpbuf, "/");		// root/
+		strcat(log_info_name_tmpbuf, tmp_buf);	// root/xxx.log
 	}
 
+	LogPreFix = malloc(strlen(logprefix + 1));
+	LogDebugName = malloc(strlen(log_debug_name_tmpbuf + 1));
+	LogInfoName = malloc(strlen(log_info_name_tmpbuf + 1));
 	
-	LogPreFix = logprefix;
-	LogDebugName = log_debug_name;
-	LogInfoName = log_info_name;
+	if(!LogPreFix || !LogDebugName || !LogInfoName)
+	{
+		printf("log malloc error\n");
+		exit(0);
+	}
+	
+	strcpy(LogPreFix, logprefix);
+	strcpy(LogDebugName, log_debug_name_tmpbuf);
+	strcpy(LogInfoName, log_info_name_tmpbuf);
+	
+	printf("LogDebugName[%s]\n", LogDebugName);
+	printf("LogInfoName[%s]\n", LogInfoName);
+	
+	//目录不存在就创建
+	if(LOG_FileIsExist(LogDebugName) == -1)
+	{
+		LOG_CreateDir_FromFile(LogDebugName);
+	}
+	if(LOG_FileIsExist(LogInfoName) == -1)
+	{
+		LOG_CreateDir_FromFile(LogInfoName);
+	}
 }
 
 

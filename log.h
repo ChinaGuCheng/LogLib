@@ -1,5 +1,8 @@
 #ifndef _LOG_H
 #define _LOG_H
+
+
+
 /*************************************************************************
 	> File Name: log.h
 	> Author: 
@@ -11,6 +14,8 @@
 extern "C"{
 #endif
 
+//argv[0]	日志前缀	debug日志名	info日志名
+void log_init(const char *argv_0, const char* logPrefix, const char *log_debug_name, const char *log_info_name);
 
 typedef enum{
 	LOG_NONE=0,
@@ -35,8 +40,6 @@ typedef enum{
 #define LOG_INFO(fmt...)          uwsc_log(LOG_INFO, fmt)
 #define LOG_ERR(fmt...)           uwsc_log(LOG_ERR, fmt)
 
-//init 日志前缀 debug日志名 info日志名
-void log_init(const char* logPrefix, const char *log_debug_name, const char *log_info_name);
 void  __uwsc_log(const char *filename, int line, int priority, const char *fmt, ...);
 
 
