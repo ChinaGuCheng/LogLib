@@ -299,7 +299,7 @@ void WriteLog(int priority, const char *data)
 	{
 		remove(logName);
 	}
-    int fd = open(logName, O_RDWR | O_CREAT | O_APPEND, 0777);
+    int fd = open(logName, O_RDWR | O_CREAT | O_APPEND, 0644);
     if(fd < 0)
     {
         return;
